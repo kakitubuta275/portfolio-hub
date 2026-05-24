@@ -133,3 +133,105 @@ output "bucket_name" {
 output "cloudfront_domain_name" {
   value = aws_cloudfront_distribution.site.domain_name
 }
+
+
+locals {
+  github_owner = "kakitubuta275"
+  github_repo  = "portfolio-hub"
+}
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url = "https://token.actions.githubusercontent.com"
+
+  client_id_list = [
+    "sts.amazonaws.com"
+  ]
+}
+
+data "aws_iam_policy_document" "github_actions_assume_role" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringLike"
+      variable = "token.actions.githubusercontent.com:sub"
+      values = [
+        "repo:${local.github_owner}/${local.github_repo}:ref:refs/heads/main"
+      ]
+    }
+  }
+}
+
+resource "aws_iam_role" "github_actions_deploy" {
+  name               = "portfolio-hub-github-actions-deploy"
+  assume_role_policy = data.aws_iam_policy_document.github_actions_assume_role.json
+}
+
+data "aws_iam_policy_document" "github_actions_deploy" {
+  statement {
+    sid = "AllowDeployToSiteBucket"
+
+    actions = [
+      "s3:ListBucket"
+    ]
+
+    resources = [
+      aws_s3_bucket.site.arn
+    ]
+  }
+
+  statement {
+    sid = "AllowWriteSiteObjects"
+
+    actions = [
+      "s3:GetObject",
+      "s3:PutObject",
+      "s3:DeleteObject"
+    ]
+
+    resources = [
+      "${aws_s3_bucket.site.arn}/*"
+    ]
+  }
+
+  statement {
+    sid = "AllowCloudFrontInvalidation"
+
+    actions = [
+      "cloudfront:CreateInvalidation"
+    ]
+
+    resources = [
+      aws_cloudfront_distribution.site.arn
+    ]
+  }
+}
+
+resource "aws_iam_policy" "github_actions_deploy" {
+  name   = "portfolio-hub-github-actions-deploy"
+  policy = data.aws_iam_policy_document.github_actions_deploy.json
+}
+
+resource "aws_iam_role_policy_attachment" "github_actions_deploy" {
+  role       = aws_iam_role.github_actions_deploy.name
+  policy_arn = aws_iam_policy.github_actions_deploy.arn
+}
+
+output "github_actions_role_arn" {
+  value = aws_iam_role.github_actions_deploy.arn
+}
+
+output "cloudfront_distribution_id" {
+  value = aws_cloudfront_distribution.site.id
+}
