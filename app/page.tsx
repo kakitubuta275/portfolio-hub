@@ -8,7 +8,7 @@ export default function Home() {
           AWS / Network / Web Application
         </p>
         <h1 className="text-4xl font-bold tracking-tight">
-          Portfolio Hub
+          Portfolio Hub on AWS
         </h1>
         <p className="max-w-2xl text-zinc-600">
           AWSを活用したポートフォリオサイト兼Webアプリケーションハブです。
